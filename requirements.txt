@@ -1,0 +1,4 @@
+PyMuPDF                 # -> Extract text from normal PDFs and render scanned PDF pages
+Pillow                  # -> Open and preprocess report images
+pytesseract             # -> Connect Python to Tesseract OCR
+reportlab               # -> Create our dummy/test PDF reports
