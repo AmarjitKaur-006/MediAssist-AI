@@ -40,16 +40,19 @@ def test_medical_extraction():
     assert findings[0].reference_min == 12.0
     assert findings[0].reference_max == 16.0
     assert findings[0].status == "Low"
+    assert findings[0].finding_type == "numeric"
 
     # WBC
     assert findings[1].test_name == "WBC Count"
     assert findings[1].value == 8500
     assert findings[1].status == "Normal"
+    assert findings[1].finding_type == "numeric"
 
     # Platelets
     assert findings[2].test_name == "Platelet Count"
     assert findings[2].value == 250000
     assert findings[2].status == "Normal"
+    assert findings[2].finding_type == "numeric"
 
     # Vitamin D
     assert findings[3].test_name == "Vitamin D"
@@ -58,6 +61,7 @@ def test_medical_extraction():
     assert findings[3].reference_min == 30
     assert findings[3].reference_max == 100
     assert findings[3].status == "Low"
+    assert findings[3].finding_type == "numeric"
 
     print("\nMedical extraction test passed! ✓")
 
@@ -80,6 +84,7 @@ def test_reference_range_dash_variations():
         assert findings[0].reference_min == 12.0
         assert findings[0].reference_max == 16.0
         assert findings[0].status == "Low"
+        assert findings[0].finding_type == "numeric"
 
         print(findings[0])
 
@@ -103,6 +108,7 @@ def test_missing_reference_range():
     assert findings[0].reference_min is None
     assert findings[0].reference_max is None
     assert findings[0].status == "Unknown"
+    assert findings[0].finding_type == "numeric"
 
     print("\nMissing reference range test passed! ✓")
 
@@ -141,8 +147,76 @@ def test_non_lab_lines_are_ignored():
 
     print("\nNon-laboratory line test passed! ✓")
 
+def test_qualitative_findings():
+
+    text = """
+    URINALYSIS
+
+    Protein: Negative
+    Nitrite: Positive
+    Blood: Trace
+    Bacteria: Present
+    """
+
+    findings = extract_medical_findings(text)
+
+    print("\n========== QUALITATIVE FINDING TEST ==========\n")
+
+    for finding in findings:
+        print(finding)
+
+    # Four qualitative findings should be extracted.
+    assert len(findings) == 4
+
+    # Protein
+    assert findings[0].test_name == "Protein"
+    assert findings[0].value == "Negative"
+    assert findings[0].unit == ""
+    assert findings[0].reference_min is None
+    assert findings[0].reference_max is None
+    assert findings[0].status == "Unknown"
+    assert findings[0].finding_type == "qualitative"
+
+    # Nitrite
+    assert findings[1].test_name == "Nitrite"
+    assert findings[1].value == "Positive"
+    assert findings[1].finding_type == "qualitative"
+
+    # Blood
+    assert findings[2].test_name == "Blood"
+    assert findings[2].value == "Trace"
+    assert findings[2].finding_type == "qualitative"
+
+    # Bacteria
+    assert findings[3].test_name == "Bacteria"
+    assert findings[3].value == "Present"
+    assert findings[3].finding_type == "qualitative"
+
+    print("\nQualitative finding test passed! ✓")
+
+
+def test_unrecognized_text_is_not_extracted_as_qualitative():
+
+    text = """
+    Patient Status: Stable
+    Report Type: Laboratory
+    Department: Pathology
+    """
+
+    findings = extract_medical_findings(text)
+
+    print("\n========== QUALITATIVE FILTER TEST ==========\n")
+    print(findings)
+
+    # None of these lines use a recognized qualitative result.
+    assert len(findings) == 0
+
+    print("\nQualitative filter test passed! ✓")
+
 if __name__ == "__main__":
     test_medical_extraction()
     test_reference_range_dash_variations()
     test_missing_reference_range()
     test_non_lab_lines_are_ignored()
+    test_qualitative_findings()
+    test_unrecognized_text_is_not_extracted_as_qualitative()

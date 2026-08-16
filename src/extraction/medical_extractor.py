@@ -8,14 +8,19 @@ class MedicalFinding:
     """
     Represents one laboratory finding extracted
     from a medical report.
+
+    A finding can be:
+    - numeric: value is a number and may have a reference range
+    - qualitative: value is a reported word such as Positive, Negative, Trace, etc.
     """
 
     test_name: str
-    value: float
+    value: float | str
     unit: str
     reference_min: Optional[float]
     reference_max: Optional[float]
     status: str
+    finding_type: str
 
 
 def determine_status(
@@ -24,8 +29,9 @@ def determine_status(
     reference_max: float | None
 ) -> str:
     """
-    Determine whether a laboratory value is Low,
-    Normal, High, or Unknown based on its reference range.
+    Determine whether a numeric laboratory value is
+    Low, Normal, High, or Unknown based on its
+    reference range.
     """
 
     if reference_min is None or reference_max is None:
@@ -39,14 +45,20 @@ def determine_status(
 
     return "Normal"
 
+
 def extract_medical_findings(text: str) -> List[MedicalFinding]:
     """
-    Extract laboratory findings from cleaned medical report text.
+    Extract numeric and qualitative laboratory findings
+    from cleaned medical report text.
 
-    Expected format:
+    Numeric example:
+        Hemoglobin: 11.2 g/dL
+        Reference Range: 12.0 - 16.0 g/dL
 
-        Test Name: Value Unit
-        Reference Range: Minimum - Maximum Unit
+    Qualitative examples:
+        Protein: Negative
+        Nitrite: Positive
+        Blood: Trace
 
     Returns:
         A list of MedicalFinding objects.
@@ -55,78 +67,131 @@ def extract_medical_findings(text: str) -> List[MedicalFinding]:
     findings = []
 
     excluded_fields = {
-    "patient name",
-    "name",
-    "age",
-    "patient age",
-    "date",
-    "report date",
-    "date of birth",
-    "dob",
-}
+        "patient name",
+        "name",
+        "age",
+        "patient age",
+        "date",
+        "report date",
+        "date of birth",
+        "dob",
+    }
+
+    # Only recognize a conservative set of qualitative result words.
+    qualitative_values = {
+        "positive",
+        "negative",
+        "trace",
+        "present",
+        "absent",
+    }
 
     lines = text.splitlines()
 
     for i, line in enumerate(lines):
 
-        # Look for lines containing:
-        # Test Name: Value Unit
-        match = re.match(
+        current_line = line.strip()
+
+        if not current_line:
+            continue
+
+        # ============================================================
+        # 1. NUMERIC FINDING EXTRACTION
+        # ============================================================
+
+        numeric_match = re.match(
             r"^(.+?):\s*([\d,]+(?:\.\d+)?)\s*([A-Za-z/%]+)\s*$",
-            line.strip()
+            current_line
         )
 
-        if not match:
-            continue
+        if numeric_match:
 
-        test_name = match.group(1).strip()
-        if test_name.lower() in excluded_fields:
-            continue
+            test_name = numeric_match.group(1).strip()
 
+            if test_name.lower() in excluded_fields:
+                continue
 
-        value = float(match.group(2).replace(",", ""))
-        unit = match.group(3).strip()
-
-        reference_min = None
-        reference_max = None
-
-        # Look at the next line for the reference range.
-        if i + 1 < len(lines):
-
-            reference_match = re.search(
-                r"Reference Range:\s*"
-                r"([\d,]+(?:\.\d+)?)\s*"
-                r"[-–—]\s*"
-                r"([\d,]+(?:\.\d+)?)",
-                lines[i + 1],
-                flags=re.IGNORECASE
+            value = float(
+                numeric_match.group(2).replace(",", "")
             )
 
-            if reference_match:
-                reference_min = float(
-                    reference_match.group(1).replace(",", "")
+            unit = numeric_match.group(3).strip()
+
+            reference_min = None
+            reference_max = None
+
+            # Look at the next line for the reference range.
+            if i + 1 < len(lines):
+
+                reference_match = re.search(
+                    r"Reference Range:\s*"
+                    r"([\d,]+(?:\.\d+)?)\s*"
+                    r"[-–—]\s*"
+                    r"([\d,]+(?:\.\d+)?)",
+                    lines[i + 1],
+                    flags=re.IGNORECASE
                 )
 
-                reference_max = float(
-                    reference_match.group(2).replace(",", "")
-                )
+                if reference_match:
 
-        # Determine status
-        status = determine_status(
-            value,
-            reference_min,
-            reference_max
+                    reference_min = float(
+                        reference_match.group(1).replace(",", "")
+                    )
+
+                    reference_max = float(
+                        reference_match.group(2).replace(",", "")
+                    )
+
+            status = determine_status(
+                value,
+                reference_min,
+                reference_max
+            )
+
+            finding = MedicalFinding(
+                test_name=test_name,
+                value=value,
+                unit=unit,
+                reference_min=reference_min,
+                reference_max=reference_max,
+                status=status,
+                finding_type="numeric"
+            )
+
+            findings.append(finding)
+
+            continue
+
+        # ============================================================
+        # 2. QUALITATIVE FINDING EXTRACTION
+        # ============================================================
+
+        qualitative_match = re.match(
+            r"^(.+?):\s*([A-Za-z]+)\s*$",
+            current_line
         )
 
-        finding = MedicalFinding(
-            test_name=test_name,
-            value=value,
-            unit=unit,
-            reference_min=reference_min,
-            reference_max=reference_max,
-            status=status
-        )
+        if qualitative_match:
 
-        findings.append(finding)
+            test_name = qualitative_match.group(1).strip()
+            qualitative_value = qualitative_match.group(2).strip()
+
+            if test_name.lower() in excluded_fields:
+                continue
+
+            if qualitative_value.lower() not in qualitative_values:
+                continue
+
+            finding = MedicalFinding(
+                test_name=test_name,
+                value=qualitative_value,
+                unit="",
+                reference_min=None,
+                reference_max=None,
+                status="Unknown",
+                finding_type="qualitative"
+            )
+
+            findings.append(finding)
 
     return findings
